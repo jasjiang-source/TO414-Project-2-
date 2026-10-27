@@ -105,5 +105,8 @@ According to the official NCAA, higher-seeded (better-ranked) teams win roughly 
 
 Our initial regression model, which only uses half of the features, and only uses a basic regression (no interactions or nonlinear terms) already resulted in a 77.5% accuracy, an 83% sensitivity, and a 65% specificity. In this context, a "positive" is a game that team 1 won (winner = 1), and team 1 is usually the higher seed in our data. Sensitivity is the percentage of the games that team 1 really won that the model also predicted as wins. Of the 191 test games team 1 won, the model correctly called 159 of them (83%) and missed 32, about 1 in 6. Specificity is the percentage of the games that team 1 really lost that the model correctly predicted as losses. Of the 89 test games team 1 lost, the model caught 58 of them (65%), about 2 out of every 3, and wrongly predicted a team 1 win in the other 31. In other words, the model is very good at confirming when the stronger team will win, and it already catches about two thirds of the games where team 1 loses, which are the games that make or break a bracket. When the model predicts a team 1 win it is right 83.7% of the time, and when it predicts a team 1 loss it is right 64.4% of the time. For comparison, simply picking team 1 in every game would have been right 68.2% of the time on these same test games.
  
-Therefore we are already above the seed-level predictions which most people use to evaluate their March Madness brackets. We are excited about improving the model and using it to beat the betting odds on March Madness. 
+Therefore we are already above the seed-level predictions which most people use to evaluate their March Madness brackets. We are excited about improving the model and using it to beat the betting odds on March Madness.
+
+. 
+
 
