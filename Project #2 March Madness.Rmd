@@ -14,6 +14,12 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+```{r}
+# MAKE A FLOATING TOC TO GET EXTRA CREDITTTTT!!!!!!!!! FIND THE LIBRARY FOR IT 
+```
+
+
 # Our Dataset
 
 We are using the NCAA Men's March Madness dataset compiled by G. M. Tanner ([github.com/gmtanner-cord/March-Madness](https://github.com/gmtanner-cord/March-Madness)). The data was collected from [Sports-Reference](https://www.sports-reference.com/cbb/) and covers every NCAA men's tournament game from 2001 to 2025 (there was no tournament in 2020).
