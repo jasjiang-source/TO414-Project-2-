@@ -1,0 +1,109 @@
+---
+title: "Project #2: March Madness"
+author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
+date: "2026-10-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Our Dataset
+
+We are using the NCAA Men's March Madness dataset compiled by G. M. Tanner ([github.com/gmtanner-cord/March-Madness](https://github.com/gmtanner-cord/March-Madness)). The data was collected from [Sports-Reference](https://www.sports-reference.com/cbb/) and covers every NCAA men's tournament game from 2001 to 2025 (there was no tournament in 2020).
+ 
+Each row is one tournament game between "team 1" and "team 2" and has 134 columns. We decided to get rid of all the "team 2" data because it was just a repetition of information and would overload our models. 
+
+# Our Business Question 
+
+## What is March Madness?
+ 
+Every March, 68 Division I men's basketball teams are selected for the NCAA tournament. A 10-person selection committee ranks the teams, places them into four regions, and gives each team a seed from 1 (strongest) to 16 (weakest). After the opening games, 64 teams play six single-elimination rounds, from the Round of 64 to the national championship. A team's season ends with one bad game, which is why the tournament is so unpredictable and so popular.
+
+## Why it matters to business 
+
+March Madness is one of the biggest betting event in American sports, with billions of dollars wagered every year and tens of millions of bracket contest entries. The selection committee's seeds are the public's main guide to who should win. Most bracket players lean heavily on seeds, and the betting public tends to back the better-seeded team. Higher seeds win roughly 65% to 70% of tournament games, which means about 1 in 3 games goes against the seeds. Anyone who can tell **which** games those will be has an edge.
+ 
+**Business question:** Using a team’s season statistics (information available before a tournament), can we predict whether that team will win a March Madness game more accurately than simply picking the higher seed?
+
+## What our model means for profits
+
+To make money, our model ultimately has to do better than the betting market's odds, not just the seeds. Beating the seed-based pick is the first step and shows whether team statistics carry information that seeds miss. In later stages we will improve the model and test how often it would have identified profitable picks.
+
+
+### Loading Data and Initial Data Exploration
+```{r}
+mmadness <- read.csv('ncaa_mbb_2001-2025_full.csv')
+
+#second half of the file is duplicates where the opposite team is "team 1", so removing (at Prof Kumar's suggestion)
+mmadness <- mmadness[1:1512, ]
+
+# Analyzing the structure of the data 
+str(mmadness)
+
+# Looking at descriptive statistics 
+summary(mmadness)
+```
+
+### Cleaning the Data 
+```{r}
+
+mmadness$winner <- ifelse(mmadness$winner == "team1", 1, 0)
+
+mmadness$conf.2 <- as.factor(mmadness$conf.2)
+mmadness$conf.1 <- as.factor(mmadness$conf.1)
+
+
+str(mmadness)
+
+# deleting non-relevant variables like names and where the data was found
+mmadness$name.1 <- NULL
+mmadness$link.1 <- NULL
+
+mmadness$name.2 <- NULL
+mmadness$link.2 <- NULL
+mmadness$point_diff <- NULL
+mmadness$year <- NULL
+
+# some conferences are too small and can be only in one side of the train/testing so removing
+mmadness$conf.1 <- NULL
+mmadness$conf.2 <- NULL
+
+#Removing the second team's stats for convenience (at Prof. Kumar's suggestion) in initial testing because it was converging --> we will revisit this during our project 
+mmadness[, 73:ncol(mmadness)] <- NULL
+```
+
+### Preliminary logistic regression model 
+```{r}
+
+# Creating test/train ratio and splitting
+ratio <- 0.7
+
+set.seed(12345)
+train_rows <- sample(1:nrow(mmadness), ratio*nrow(mmadness))
+
+
+madness_train <- mmadness[train_rows, ]
+madness_test <- mmadness[-train_rows, ]
+
+# Creating initial model
+logmodel <- glm(winner ~ ., data = madness_train, family = "binomial")
+summary(logmodel)
+
+# Predicting the testing data
+madness_predict <- predict(logmodel, madness_test, type = "response")
+
+madness_bin <- ifelse(madness_predict >= 0.5, 1, 0)
+
+library(caret)
+confusionMatrix(as.factor(madness_bin), as.factor(madness_test$winner), positive = "1")
+
+```
+
+According to the official NCAA, higher-seeded (better-ranked) teams win roughly 65% to 70% of all March Madness games overall. However, the exact win rate varies significantly depending on the specific round and seed matchup.
+
+Our initial regression model, which only uses half of the features, and only uses a basic regression (no interactions or nonlinear terms) already resulted in a 77.5% accuracy, an 83% sensitivity, and a 65% specificity. In this context, a "positive" is a game that team 1 won (winner = 1), and team 1 is usually the higher seed in our data. Sensitivity is the percentage of the games that team 1 really won that the model also predicted as wins. Of the 191 test games team 1 won, the model correctly called 159 of them (83%) and missed 32, about 1 in 6. Specificity is the percentage of the games that team 1 really lost that the model correctly predicted as losses. Of the 89 test games team 1 lost, the model caught 58 of them (65%), about 2 out of every 3, and wrongly predicted a team 1 win in the other 31. In other words, the model is very good at confirming when the stronger team will win, and it already catches about two thirds of the games where team 1 loses, which are the games that make or break a bracket. When the model predicts a team 1 win it is right 83.7% of the time, and when it predicts a team 1 loss it is right 64.4% of the time. For comparison, simply picking team 1 in every game would have been right 68.2% of the time on these same test games.
+ 
+Therefore we are already above the seed-level predictions which most people use to evaluate their March Madness brackets. We are excited about improving the model and using it to beat the betting odds on March Madness. 
+
