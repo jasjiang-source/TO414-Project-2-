@@ -3,3 +3,74 @@ title: "Data_Cleaning"
 output: html_document
 ---
 
+```{r}
+mmadness <- read.csv('ncaa_mbb_2001-2025_full.csv')
+
+#second half of the file is duplicates where the opposite team is "team 1", so removing (at Prof Kumar's suggestion)
+mmadness <- mmadness[1:1511, ]
+
+# Analyzing the structure of the data 
+str(mmadness)
+
+# Looking at descriptive statistics 
+summary(mmadness)
+
+mmadness$winner <- ifelse(mmadness$winner == "team1", 1, 0)
+
+mmadness$conf.2 <- as.factor(mmadness$conf.2)
+mmadness$conf.1 <- as.factor(mmadness$conf.1)
+
+
+str(mmadness)
+
+# deleting non-relevant variables like names and where the data was found
+mmadness$name.1 <- NULL
+mmadness$link.1 <- NULL
+
+mmadness$name.2 <- NULL
+mmadness$link.2 <- NULL
+mmadness$point_diff <- NULL
+mmadness$year <- NULL
+
+# some conferences are too small and can be only in one side of the train/testing so removing
+mmadness$conf.1 <- NULL
+mmadness$conf.2 <- NULL
+```
+```{r}
+# Count missing values in each column
+missing_counts <- colSums(is.na(mmadness))
+
+# Remove columns with more than 20 missing values
+mmadness <- 
+  mmadness[, missing_counts <= 20]
+
+# Check remaining missing values
+colSums(is.na(mmadness))
+```
+
+#testing new convergence
+```{r}
+# Creating test/train ratio and splitting
+ratio <- 0.7
+
+set.seed(12345)
+train_rows <- sample(1:nrow(mmadness), ratio*nrow(mmadness))
+
+
+madness_train <- mmadness[train_rows, ]
+madness_test <- mmadness[-train_rows, ]
+
+# Creating initial model
+logmodel <- glm(winner ~ ., data = madness_train, family = "binomial")
+summary(logmodel)
+
+# Predicting the testing data
+madness_predict <- predict(logmodel, madness_test, type = "response")
+
+madness_bin <- ifelse(madness_predict >= 0.5, 1, 0)
+
+library(caret)
+confusionMatrix(as.factor(madness_bin), as.factor(madness_test$winner), positive = "1")
+
+```
+
