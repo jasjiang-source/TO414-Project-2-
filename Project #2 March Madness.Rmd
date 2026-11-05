@@ -2,10 +2,15 @@
 title: "Project #2: March Madness"
 author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
 date: "2026-10-22"
-output: html_document
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
 ---
 
-```{r setup, include=FALSE}
+```{r data-exploration, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -31,9 +36,14 @@ March Madness is one of the biggest betting event in American sports, with billi
 
 To make money, our model ultimately has to do better than the betting market's odds, not just the seeds. Beating the seed-based pick is the first step and shows whether team statistics carry information that seeds miss. In later stages we will improve the model and test how often it would have identified profitable picks.
 
+```{r, message=FALSE}
+library(kableExtra)
+library(tidyverse)
+```
 
 ### Loading Data and Initial Data Exploration
 ```{r}
+
 mmadness <- read.csv('ncaa_mbb_2001-2025_full.csv')
 
 #second half of the file is duplicates where the opposite team is "team 1", so removing (at Prof Kumar's suggestion)
@@ -41,6 +51,17 @@ mmadness <- mmadness[1:1512, ]
 
 # Analyzing the structure of the data 
 str(mmadness)
+
+cat("Rows:", nrow(mmadness), "| Columns:", ncol(mmadness))
+
+mmadness %>%
+  dplyr::select(1:8) %>%
+  dplyr::slice_head(n = 8) %>%
+  knitr::kable(caption = "Preview of the March Madness dataset") %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE
+  )
 
 # Looking at descriptive statistics 
 summary(mmadness)
@@ -75,7 +96,7 @@ mmadness[, 73:ncol(mmadness)] <- NULL
 ```
 
 ### Preliminary logistic regression model 
-```{r}
+```{r preliminary-model, cache=TRUE}
 
 # Creating test/train ratio and splitting
 ratio <- 0.7
