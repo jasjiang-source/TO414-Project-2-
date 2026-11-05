@@ -46,6 +46,9 @@ mmadness <-
 
 # Check remaining missing values
 colSums(is.na(mmadness))
+
+mmadness <- na.omit(mmadness)
+
 ```
 
 #testing new convergence
