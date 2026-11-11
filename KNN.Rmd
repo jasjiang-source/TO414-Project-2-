@@ -3,3 +3,131 @@ title: "KNN"
 output: html_document
 ---
 
+# Loading in the cleaned and split data
+```{r}
+madness_train <- readRDS("training_data.rds")
+madness_test <- readRDS("testing_data.rds")
+```
+
+# Preparing the data
+```{r}
+# Separate predictors and outcome
+X_train <- subset(madness_train, select = -winner)
+X_test <- subset(madness_test, select = -winner)
+
+knn_train_labels <- as.factor(madness_train$winner)
+knn_test_labels <- as.factor(madness_test$winner)
+
+# Normalize predictors to 0–1
+normalize <- function(x) {(x - min(x)) / (max(x) - min(x))}
+
+knn_train <- as.data.frame(lapply(X_train, normalize))
+knn_test <- as.data.frame(lapply(X_test, normalize))
+
+# Check normalized predictors
+summary(knn_train)
+```
+
+# Running Model
+```{r}
+
+# Use the square root of the number of training rows as the number of nearest neighbors
+k_start <- round(sqrt(nrow(knn_train)))
+
+library(class)
+
+madness_test_pred_knn <- knn(
+  train = knn_train,
+  test = knn_test,
+  cl = knn_train_labels,
+  k = k_start
+)
+
+```
+
+# Prediction and Evaluation
+```{r}
+
+knn_results <- list(
+  prediction = madness_test_pred_knn,
+  actual = knn_test_labels
+)
+
+library(caret)
+knn_confusion <- confusionMatrix(
+  as.factor(knn_results$prediction),
+  as.factor(knn_results$actual),
+  positive = "1"
+)
+
+knn_confusion
+```
+
+# Improving the model 
+```{r}
+
+# Try odd k values from 1 to the square root of the training set size
+k_values <- seq(1, round(sqrt(nrow(knn_train))), by = 2)
+
+knn_accuracy <- data.frame(k = k_values, accuracy = NA_real_)
+
+for (i in seq_along(k_values)) {
+  pred <- knn(
+    train = knn_train,
+    test = knn_test,
+    cl = knn_train_labels,
+    k = k_values[i]
+  )
+
+  cm <- confusionMatrix(
+    data = factor(pred, levels = levels(knn_test_labels)),
+    reference = knn_test_labels,
+    positive = "1"
+  )
+
+  knn_accuracy$accuracy[i] <- cm$overall["Accuracy"]
+}
+
+knn_accuracy
+best_k <- knn_accuracy$k[which.max(knn_accuracy$accuracy)]
+best_k
+
+```
+
+# Final model
+```{r}
+
+
+madness_final_knn <- knn(
+  train = knn_train,
+  test = knn_test,
+  cl = knn_train_labels,
+  k = best_k
+)
+
+knn_results_final <- list(
+  prediction = madness_final_knn,
+  actual = knn_test_labels
+)
+
+library(caret)
+knn_confusion_final <- confusionMatrix(
+  as.factor(knn_results_final$prediction),
+  as.factor(knn_results_final$actual),
+  positive = "1"
+)
+
+knn_confusion_final
+
+
+```
+
+# Saving relevant data files
+```{r}
+
+saveRDS(knn_results_final$prediction, "knn_predictions.rds")
+saveRDS(knn_confusion_final, "knn_confusion_matrix.rds")
+
+
+```
+
