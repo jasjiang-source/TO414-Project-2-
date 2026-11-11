@@ -51,10 +51,10 @@ mmadness <- na.omit(mmadness)
 
 ```
 
-#testing new convergence
+# Splitting data
 ```{r}
-# Creating test/train ratio and splitting
-ratio <- 0.7
+
+ratio <- 0.5
 
 set.seed(12345)
 train_rows <- sample(1:nrow(mmadness), ratio*nrow(mmadness))
@@ -63,17 +63,14 @@ train_rows <- sample(1:nrow(mmadness), ratio*nrow(mmadness))
 madness_train <- mmadness[train_rows, ]
 madness_test <- mmadness[-train_rows, ]
 
-# Creating initial model
-logmodel <- glm(winner ~ ., data = madness_train, family = "binomial")
-summary(logmodel)
 
-# Predicting the testing data
-madness_predict <- predict(logmodel, madness_test, type = "response")
+```
 
-madness_bin <- ifelse(madness_predict >= 0.5, 1, 0)
-
-library(caret)
-confusionMatrix(as.factor(madness_bin), as.factor(madness_test$winner), positive = "1")
+# Saving data files to use in other files
+```{r}
+saveRDS(mmadness, "clean_data_full.rds")
+saveRDS(madness_train, "training_data.rds")
+saveRDS(madness_test, "testing_data.rds")
 
 ```
 
