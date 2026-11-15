@@ -1,0 +1,94 @@
+---
+title: "SVM"
+output: html_document
+---
+
+# Load data
+```{r}
+library(kernlab)
+library(caret)
+
+madness_train <- readRDS("training_data.rds")
+madness_test <- readRDS("testing_data.rds")
+
+# ksvm only does classification if the outcome is a factor
+madness_train$winner <- as.factor(madness_train$winner)
+madness_test$winner <- as.factor(madness_test$winner)
+```
+
+## Step 2: Training a model on the data (linear kernel)
+```{r}
+# begin by training a simple SVM with a linear kernel ("vanilladot")
+madness_classifier <- ksvm(winner ~ ., data = madness_train,
+                           kernel = "vanilladot")
+
+madness_classifier
+```
+
+## Step 3: Evaluating model performance (linear kernel)
+```{r}
+madness_predictions <- predict(madness_classifier, madness_test)
+
+svm_confusion <- confusionMatrix(
+  as.factor(madness_predictions),
+  as.factor(madness_test$winner),
+  positive = "1"
+)
+svm_confusion
+```
+
+## Step 4: Testing other kernels
+
+We now test two other kernels to see whether a non-linear boundary changes performance.
+
+### RBF kernel
+```{r}
+madness_classifier_rbf <- ksvm(winner ~ ., data = madness_train,
+                               kernel = "rbfdot")
+
+madness_predictions_rbf <- predict(madness_classifier_rbf, madness_test)
+
+svm_rbf_confusion <- confusionMatrix(
+  as.factor(madness_predictions_rbf),
+  as.factor(madness_test$winner),
+  positive = "1"
+)
+svm_rbf_confusion
+```
+
+### Polynomial kernel
+```{r}
+madness_classifier_poly <- ksvm(winner ~ ., data = madness_train,
+                                kernel = "polydot",
+                                kpar = list(degree = 2))
+
+madness_predictions_poly <- predict(madness_classifier_poly, madness_test)
+
+svm_poly_confusion <- confusionMatrix(
+  as.factor(madness_predictions_poly),
+  as.factor(madness_test$winner),
+  positive = "1"
+)
+svm_poly_confusion
+```
+
+## Compare kernels
+```{r}
+kernel_comparison <- data.frame(
+  Kernel = c("Linear (vanilladot)", "RBF (rbfdot)", "Polynomial, degree 2 (polydot)"),
+  Accuracy = c(svm_confusion$overall["Accuracy"],
+               svm_rbf_confusion$overall["Accuracy"],
+               svm_poly_confusion$overall["Accuracy"]),
+  Sensitivity = c(svm_confusion$byClass["Sensitivity"],
+                  svm_rbf_confusion$byClass["Sensitivity"],
+                  svm_poly_confusion$byClass["Sensitivity"]),
+  Specificity = c(svm_confusion$byClass["Specificity"],
+                  svm_rbf_confusion$byClass["Specificity"],
+                  svm_poly_confusion$byClass["Specificity"])
+)
+
+# clean up the row names (otherwise they show as "Accuracy", "Accuracy1", ...)
+row.names(kernel_comparison) <- NULL
+
+kernel_comparison
+```
