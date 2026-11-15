@@ -1,0 +1,65 @@
+---
+title: "Decision Tree"
+output: html_document
+---
+
+# Load data
+```{r}
+library(C50)
+library(caret)
+
+madness_train <- readRDS("training_data.rds")
+madness_test <- readRDS("testing_data.rds")
+
+# C5.0 needs a factor outcome
+madness_train$winner <- as.factor(madness_train$winner)
+madness_test$winner <- as.factor(madness_test$winner)
+```
+
+# Basic decision tree
+```{r}
+tree_model <- C5.0(winner ~ ., data = madness_train)
+
+tree_pred <- predict(tree_model, madness_test)
+
+tree_confusion <- confusionMatrix(tree_pred, madness_test$winner, positive = "1")
+tree_confusion
+```
+
+# Which variables does the tree use?
+```{r}
+C5imp(tree_model)
+```
+
+# Improving the model: boosting
+```{r}
+boost_model <- C5.0(winner ~ ., data = madness_train, trials = 10)
+
+boost_pred <- predict(boost_model, madness_test)
+
+boost_confusion <- confusionMatrix(boost_pred, madness_test$winner, positive = "1")
+boost_confusion
+```
+
+# Comparison
+```{r}
+tree_comparison <- data.frame(
+  Model = c("Decision tree", "Boosted tree (10 trials)"),
+  Accuracy = c(tree_confusion$overall["Accuracy"],
+               boost_confusion$overall["Accuracy"]),
+  Sensitivity = c(tree_confusion$byClass["Sensitivity"],
+                  boost_confusion$byClass["Sensitivity"]),
+  Specificity = c(tree_confusion$byClass["Specificity"],
+                  boost_confusion$byClass["Specificity"]),
+  Kappa = c(tree_confusion$overall["Kappa"],
+            boost_confusion$overall["Kappa"])
+)
+row.names(tree_comparison) <- NULL
+tree_comparison
+```
+
+# Saving relevant data files
+```{r}
+saveRDS(boost_pred, "tree_predictions.rds")
+saveRDS(boost_confusion, "tree_confusion_matrix.rds")
+```
