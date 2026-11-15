@@ -1,5 +1,172 @@
 ---
-title: "ANN"
-output: html_document
+title: "ANN Model"
+author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
+date: "2026-10-22"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(caret)
+library(neuralnet)
+library(gmodels)
+```
+
+# The ANN Model
+ 
+Our business question is whether team statistics and seeds can predict the winner of a March Madness game better than just picking the better (lower) seed. This file builds the **artificial neural network (ANN)** for that question.
+ 
+It reads the training and testing files saved by `Data_Cleaning.Rmd`, so it uses exactly the same games as everyone else's model. At the end, it saves the ANN's predicted probabilities for the test games as `ann_prob.rds`, so they can go into the group's stacked model.
+
+# Modeling and Prediction (ANN)
+
+Now, we will create the ANN model. The network passes each game's statistics through hidden "neurons," which each learn a weighted combination of the inputs, and turns the result into a probability that team 1 wins.
+
+### Loading the Training and Test Data
+ 
+```{r}
+# Load the train and test sets saved by Data_Cleaning.Rmd 
+madness_train <- readRDS("training_data.rds")
+madness_test  <- readRDS("testing_data.rds")
+ 
+dim(madness_train)
+dim(madness_test)
+ 
+# winner = 1 if team 1 won the game, 0 if team 2 won
+table(madness_train$winner)
+table(madness_test$winner)
+```
+ 
+### Normalizing the Data
+ 
+Neural networks train much better when every input is on the same 0-1 scale. Otherwise, a column like points per game (around 70) would completely overpower a column like win percentage (around 0.7). We use min-max normalization, like the class demo.
+ 
+```{r}
+# Min-max normalization function from class
+normalize <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+ 
+# Every column is already numeric 
+str(madness_train[, 1:10])
+ 
+# Stack train and test, normalize them together so both use the same scale, then split them back apart
+madness_all <- rbind(madness_train, madness_test)
+norm_all <- as.data.frame(lapply(madness_all, normalize))
+ 
+norm_train <- norm_all[1:nrow(madness_train), ]
+norm_test  <- norm_all[(nrow(madness_train) + 1):nrow(norm_all), ]
+ 
+summary(norm_train[, 1:6])
+``` 
+
+### Baselines to Beat
+ 
+Before building the network, we need to know what "good" looks like on these test games.
+
+```{r}
+# Baseline 1: always pick team 1
+mean(madness_test$winner == 1)
+ 
+# Baseline 2: pick the better (lower) seed; for equal seeds, pick team 1
+seed_pick <- ifelse(madness_test$seed.1 <= madness_test$seed.2, 1, 0)
+mean(seed_pick == madness_test$winner)
+```
+ 
+Always picking team 1 is right 65.8% of the time, and picking the better seed is right 71.4% of the time. Picking by seed is how most people fill out a bracket, so 71.4% is the real bar the ANN has to clear.
+ 
+### Creating the Model
+
+We start with the same shape as the class demo: one hidden neuron.
+ 
+```{r}
+set.seed(12345)
+ 
+# 1 hidden neuron
+ann_model <- neuralnet(winner ~ ., data = norm_train, hidden = 1,
+                       linear.output = FALSE, stepmax = 1e6, lifesign = "minimal")
+ 
+# Plot the network with all of its weights
+plot(ann_model, rep = "best")
+```
+
+```{r}
+# Test-set accuracy and Kappa of the 1-neuron network
+ann_pred <- ifelse(predict(ann_model, norm_test) > 0.5, 1, 0)
+confusionMatrix(as.factor(ann_pred), as.factor(norm_test$winner), positive = "1")$overall[c("Accuracy", "Kappa")]
+```
+ 
+The 1-neuron network is right on 73.6% of the test games, with a Kappa of 0.426. It already beats both baselines.
+ 
+### Improving the Model
+
+Next, we test whether more neurons or a second hidden layer help. For each shape we record the test accuracy, Kappa, sensitivity (team 1 wins called correctly) and specificity (team 2 wins called correctly). Because team 1 wins most games, Kappa is our main measure.
+
+```{r}
+shapes <- list(1, 2, 3, 5, c(2, 1), c(3, 1), c(3, 2))
+ 
+ann_results <- data.frame()
+for (h in shapes) {
+  set.seed(12345)  
+  ann_h <- neuralnet(winner ~ ., data = norm_train, hidden = h,
+                     linear.output = FALSE, stepmax = 1e6)
+  pred_h <- ifelse(predict(ann_h, norm_test) > 0.5, 1, 0)
+  cm_h <- confusionMatrix(as.factor(pred_h), as.factor(norm_test$winner), positive = "1")
+ 
+  # Save this shape's results as one row
+  ann_results <- rbind(ann_results, data.frame(
+    hidden      = paste(h, collapse = ", "),
+    Accuracy    = round(cm_h$overall["Accuracy"], 3),
+    Kappa       = round(cm_h$overall["Kappa"], 3),
+    Sensitivity = round(cm_h$byClass["Sensitivity"], 3),
+    Specificity = round(cm_h$byClass["Specificity"], 3),
+    row.names = NULL))
+}
+ 
+# Sorted from best to worst Kappa
+ann_results[order(-ann_results$Kappa), ]
+```
+
+```{r}
+# Test Kappa for each network shape
+ggplot(ann_results, aes(x = reorder(hidden, -Kappa), y = Kappa)) +
+  geom_col(fill = "darkorange") +
+  geom_text(aes(label = Kappa), vjust = -0.5) +
+  labs(title = "Test Kappa by Network Shape", x = "Hidden neurons", y = "Kappa")
+```
+
+**The 1-neuron network is the best**, with the highest accuracy (73.6%) and Kappa (0.426) of the 7 shapes. Adding neurons made the network worse: 5 neurons drops Kappa to 0.338. With 91 inputs, every extra neuron adds 92 more weights to learn from only 682 training games, so bigger networks start memorizing the training games instead of learning real patterns. We keep the 1-neuron network as our final model.
+
+```{r}
+# Predicted probability that team 1 wins each test game
+ann_prob <- as.vector(predict(ann_model, norm_test))
+summary(ann_prob)
+```
+
+Almost every probability is very close to 0 or 1, so the network is very sure of its picks. Because of this, moving the cutoff from 0.5 to 0.3 (which helps many models) would change almost no predictions.
+ 
+# Confusion Matrix and Interpretation
+
+```{r}
+# Predict a team 1 win (1) when the probability is above 0.5
+ann_bin <- ifelse(ann_prob > 0.5, 1, 0)
+
+# Rows = actual winner, columns = predicted winner (1 = team 1)
+CrossTable(x = norm_test$winner, y = ann_bin, prop.chisq = FALSE)
+
+confusionMatrix(as.factor(ann_bin), as.factor(norm_test$winner), positive = "1")
+```
+
+In this confusion matrix, a **positive** is a team 1 win. Team 1 is the better seed in about three quarters of games, so a team 2 win is usually an underdog win.
+
+Based on the cross table above, the ANN has an overall accuracy of **73.6%**, since it predicted 502 of the 682 test games correctly (348 team 1 wins plus 154 team 2 wins). That beats always picking team 1 (65.8%) and picking the better seed (71.4%). **Kappa is 0.426.** 
 
