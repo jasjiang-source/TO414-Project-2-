@@ -21,6 +21,13 @@ madness_test <- readRDS("testing_data.rds")
 
 # Loading in the probability results of each model
 
+```{r}
+ann_pred <- readRDS('ANN_stacked_probability.rds')
+knn_pred <- readRDS("knn_stacked_probability.rds")
+
+```
+
+
 ## Turning into data frame
 
 ## Splitting into 70-30 split for testing/training
