@@ -163,10 +163,24 @@ ann_bin <- ifelse(ann_prob > 0.5, 1, 0)
 # Rows = actual winner, columns = predicted winner (1 = team 1)
 CrossTable(x = norm_test$winner, y = ann_bin, prop.chisq = FALSE)
 
-confusionMatrix(as.factor(ann_bin), as.factor(norm_test$winner), positive = "1")
+# Save the confusion matrix so it can be exported at the end
+ann_confusion <- confusionMatrix(as.factor(ann_bin), as.factor(norm_test$winner), positive = "1")
+ann_confusion
 ```
 
 In this confusion matrix, a **positive** is a team 1 win. Team 1 is the better seed in about three quarters of games, so a team 2 win is usually an underdog win.
 
 Based on the cross table above, the ANN has an overall accuracy of **73.6%**, since it predicted 502 of the 682 test games correctly (348 team 1 wins plus 154 team 2 wins). That beats always picking team 1 (65.8%) and picking the better seed (71.4%). **Kappa is 0.426.** 
+
+**Underdog wins are where the ANN adds value.** Of the 192 test games won by the worse seed, the ANN called 104 correctly, while picking by seed would have missed all 192.
+
+### Saving Predictions and Confusion Matrix for the Stacked Model
+
+```{r}
+# Probability that team 1 wins, one value per test game, in the same order as testing_data.rds
+saveRDS(ann_prob, "ANN_stacked_probability.rds")
+
+# The ANN's confusion matrix, so the group can compare every model side by side
+saveRDS(ann_confusion, "ANN_confusion.rds")
+```
 
