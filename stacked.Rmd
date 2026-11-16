@@ -1,0 +1,34 @@
+---
+title: "Stacked Model"
+author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load in testing data
+```{r}
+madness_train <- readRDS("training_data.rds")
+madness_test <- readRDS("testing_data.rds")
+```
+
+# Loading in the probability results of each model
+
+## Turning into data frame
+
+## Splitting into 70-30 split for testing/training
+
+# Running decision tree
+
+# Confusion matrix?
+
+# Cost matrix?
+
+
