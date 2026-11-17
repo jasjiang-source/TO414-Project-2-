@@ -60,6 +60,10 @@ tree_comparison
 
 # Saving relevant data files
 ```{r}
-saveRDS(boost_pred, "tree_predictions.rds")
-saveRDS(boost_confusion, "tree_confusion_matrix.rds")
+# Probability that team 1 wins, one value per test game, in the same order as testing_data.rds
+tree_prob_stacked <- as.vector(predict(boost_model, madness_test, type = "prob")[, "1"])
+summary(tree_prob_stacked)
+
+saveRDS(tree_prob_stacked, "tree_stacked_probability.rds")
+saveRDS(boost_confusion, "tree_confusion.rds")
 ```
