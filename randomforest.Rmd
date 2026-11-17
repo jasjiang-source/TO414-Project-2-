@@ -1,0 +1,46 @@
+---
+title: "randomforest"
+output: html_document
+---
+
+# Loading in the cleaned and split data
+```{r}
+madness_train <- readRDS("training_data.rds")
+madness_test <- readRDS("testing_data.rds")
+```
+
+# Create Random Forest Model and Display Variable Importance Plot
+```{r}
+library(randomForest)
+
+set.seed(12345)
+rf_model <- randomForest(as.factor(winner) ~ ., data = madness_train, ntree = 100)
+
+importance(rf_model)
+
+varImpPlot(rf_model)
+```
+
+# Test Random Forest Model
+```{r}
+rf_pred <- predict(rf_model, madness_test)
+```
+
+# Create Confusion Matrix for Random Forest Model
+```{r}
+library(caret)
+
+rf_confusion <- confusionMatrix(
+  as.factor(rf_pred),
+  as.factor(madness_test$winner),
+  positive = "1"
+)
+
+rf_confusion
+```
+
+# Saving relevant data files
+```{r}
+saveRDS(rf_pred, "rf_predictions.rds")
+saveRDS(rf_confusion, "rf_confusion_matrix.rds")
+```
