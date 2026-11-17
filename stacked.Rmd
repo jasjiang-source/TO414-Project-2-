@@ -22,8 +22,9 @@ madness_test <- readRDS("testing_data.rds")
 # Loading in the probability results of each model
 
 ```{r}
-ann_pred <- readRDS('ANN_stacked_probability.rds')
+ann_pred <- readRDS("ANN_stacked_probability.rds")
 knn_pred <- readRDS("knn_stacked_probability.rds")
+decision_tree_pred <- readRDS("tree_stacked_probability.rds")
 
 ```
 
