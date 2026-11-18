@@ -20,17 +20,20 @@ madness_test$winner <- as.factor(madness_test$winner)
 ```{r}
 # begin by training a simple SVM with a linear kernel ("vanilladot")
 madness_classifier <- ksvm(winner ~ ., data = madness_train,
-                           kernel = "vanilladot")
+                           kernel = "vanilladot", prob.model = TRUE)
 
 madness_classifier
 ```
 
 ## Step 3: Evaluating model performance (linear kernel)
 ```{r}
-madness_predictions <- predict(madness_classifier, madness_test)
+# probability that team 1 wins
+madness_predictions <- predict(madness_classifier, madness_test, type = "probabilities")[, "1"]
+
+head(madness_predictions)
 
 svm_confusion <- confusionMatrix(
-  as.factor(madness_predictions),
+  factor(ifelse(madness_predictions > 0.5, 1, 0), levels = c(0, 1)),
   as.factor(madness_test$winner),
   positive = "1"
 )
@@ -44,12 +47,12 @@ We now test two other kernels to see whether a non-linear boundary changes perfo
 ### RBF kernel
 ```{r}
 madness_classifier_rbf <- ksvm(winner ~ ., data = madness_train,
-                               kernel = "rbfdot")
+                               kernel = "rbfdot", prob.model = TRUE)
 
-madness_predictions_rbf <- predict(madness_classifier_rbf, madness_test)
+madness_predictions_rbf <- predict(madness_classifier_rbf, madness_test, type = "probabilities")[, "1"]
 
 svm_rbf_confusion <- confusionMatrix(
-  as.factor(madness_predictions_rbf),
+  factor(ifelse(madness_predictions_rbf > 0.5, 1, 0), levels = c(0, 1)),
   as.factor(madness_test$winner),
   positive = "1"
 )
@@ -60,12 +63,12 @@ svm_rbf_confusion
 ```{r}
 madness_classifier_poly <- ksvm(winner ~ ., data = madness_train,
                                 kernel = "polydot",
-                                kpar = list(degree = 2))
+                                kpar = list(degree = 2), prob.model = TRUE)
 
-madness_predictions_poly <- predict(madness_classifier_poly, madness_test)
+madness_predictions_poly <- predict(madness_classifier_poly, madness_test, type = "probabilities")[, "1"]
 
 svm_poly_confusion <- confusionMatrix(
-  as.factor(madness_predictions_poly),
+  factor(ifelse(madness_predictions_poly > 0.5, 1, 0), levels = c(0, 1)),
   as.factor(madness_test$winner),
   positive = "1"
 )

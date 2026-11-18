@@ -23,7 +23,10 @@ varImpPlot(rf_model)
 
 # Test Random Forest Model
 ```{r}
-rf_pred <- predict(rf_model, madness_test)
+# probability that team 1 wins
+rf_pred <- predict(rf_model, madness_test, type = "prob")[, "1"]
+
+head(rf_pred)
 ```
 
 # Create Confusion Matrix for Random Forest Model
@@ -31,7 +34,7 @@ rf_pred <- predict(rf_model, madness_test)
 library(caret)
 
 rf_confusion <- confusionMatrix(
-  as.factor(rf_pred),
+  factor(ifelse(rf_pred > 0.5, 1, 0), levels = c(0, 1)),
   as.factor(madness_test$winner),
   positive = "1"
 )
@@ -43,4 +46,5 @@ rf_confusion
 ```{r}
 saveRDS(rf_pred, "rf_predictions.rds")
 saveRDS(rf_confusion, "rf_confusion_matrix.rds")
+
 ```
