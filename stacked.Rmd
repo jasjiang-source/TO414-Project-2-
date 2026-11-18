@@ -25,6 +25,8 @@ madness_test <- readRDS("testing_data.rds")
 ann_pred <- readRDS("ANN_stacked_probability.rds")
 knn_pred <- readRDS("knn_stacked_probability.rds")
 decision_tree_pred <- readRDS("tree_stacked_probability.rds")
+svm_pred <- readRDS("svm_stacked_probability.rds")
+rf_pred <- readRDS("rf_stacked_probability.rds")
 
 ```
 

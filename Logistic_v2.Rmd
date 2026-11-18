@@ -1,0 +1,78 @@
+---
+title: "Logistic Model"
+author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
+date: "2026-10-22"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+# Loading in the cleaned and split data
+```{r}
+madness_train <- readRDS("training_data.rds")
+madness_test <- readRDS("testing_data.rds")
+all_games <- readRDS("clean_data_full.rds")
+```
+
+
+# Simple logistic model
+Starting off, I will make a simple logistic logistic model that includes all of the features in prediction.
+```{r}
+#Creating a simple logistic model to predict churn from the training data
+simple_log_model <- glm(winner ~ ., data = madness_train, family = binomial)
+
+#Looking at what is significant, and the relative weights. This will guide decision making when creating a larger model
+summary(simple_log_model)
+
+#Predicting the test data based on the model
+madness_prob_simple <- predict(simple_log_model, madness_test, type = "response")
+madness_pred_simple <- ifelse(madness_prob_simple >= 0.5, "1", "0")
+
+# Creating a confusion matrix to compare the test predictions to actual results
+library(caret)
+confusionMatrix(as.factor(madness_pred_simple), as.factor(madness_test$winner), positive = "1")
+
+```
+
+
+# Creating correlation matrix to guide optimization
+Now I will explore how the data are correlated to see what interactions may improve our logistic model. The correlation plot will be evaluated using the entire data-set. 
+```{r}
+# Correlations among all dummy-coded features
+correlations <- cor(all_games, use = "pairwise.complete.obs")
+
+
+library(corrplot)
+
+#Create a correlation plot
+corrplot(
+  correlations,
+  method = "color",
+  type = "upper",
+  tl.cex = 0.2,
+  tl.srt = 45,
+  mar = c(0, 0, 2, 0)
+)
+
+# Due to number of oclumns maybe correlation plot hard to read- print out interactions that have a high correlation
+correlation_table <- as.data.frame(as.table(correlations))
+names(correlation_table) <- c("Feature_1", "Feature_2", "Correlation")
+
+# Keep each pair once, exclude self-correlations, and filter by threshold
+correlation_table <- subset(
+  correlation_table,
+  as.character(Feature_1) < as.character(Feature_2) &
+    (Correlation < -0.6 | Correlation > 0.6)
+)
+
+# Sort strongest correlations first
+correlation_table <- correlation_table[
+  order(-abs(correlation_table$Correlation)),
+]
+
+print(correlation_table, row.names = FALSE)
+```
+
