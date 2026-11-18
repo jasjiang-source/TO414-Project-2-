@@ -1,0 +1,256 @@
+---
+title: "Logistic Regression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(caret)
+library(car)
+library(pROC)
+```
+
+# Data Prep
+
+Same cleaning as `Data_Cleaning.Rmd`, so every model (logistic, decision tree, ANN) is trained on the exact same games.
+
+```{r}
+mmadness <- read.csv('ncaa_mbb_2001-2025_full.csv')
+
+# second half of the file is duplicates with the teams flipped (row 1512 is 2001 Monmouth vs. Duke again)
+mmadness <- mmadness[1:1511, ]
+
+mmadness$winner <- ifelse(mmadness$winner == "team1", 1, 0)
+
+# deleting names, links, the outcome-based point_diff, year, and conferences
+mmadness$name.1 <- NULL
+mmadness$link.1 <- NULL
+mmadness$name.2 <- NULL
+mmadness$link.2 <- NULL
+mmadness$point_diff <- NULL
+mmadness$year <- NULL
+mmadness$conf.1 <- NULL
+mmadness$conf.2 <- NULL
+
+# remove columns with more than 400 NAs (these are stats missing for entire seasons), then drop leftover rows with NAs
+missing_counts <- colSums(is.na(mmadness))
+mmadness <- mmadness[, missing_counts <= 400]
+mmadness <- na.omit(mmadness)
+
+dim(mmadness)
+```
+
+### Train/test split
+
+Same ratio and seed as the other models so results are comparable.
+
+```{r}
+ratio <- 0.7
+set.seed(12345)
+train_rows <- sample(1:nrow(mmadness), ratio*nrow(mmadness))
+
+madness_train <- mmadness[train_rows, ]
+madness_test <- mmadness[-train_rows, ]
+```
+
+# Baselines to Beat
+
+Our business question is whether team stats can beat picking by seed, so we need two benchmarks: always picking team 1, and always picking the better (lower) seed. When both teams have the same seed (only possible in the Final Four), we pick team 1.
+
+```{r}
+# always pick team 1
+base_team1 <- mean(madness_test$winner == 1)
+
+# always pick the better seed
+seed_pick <- ifelse(madness_test$seed.1 <= madness_test$seed.2, 1, 0)
+base_seed <- mean(seed_pick == madness_test$winner)
+
+base_team1
+base_seed
+```
+
+Picking the better seed is right `r round(100*base_seed, 1)`% of the time on our test games. **That's the real number to beat**, not the `r round(100*base_team1, 1)`% from always picking team 1.
+
+# Model 1: Full Logistic Model (all 91 predictors)
+
+```{r}
+logmodel_full <- glm(winner ~ ., data = madness_train, family = "binomial")
+summary(logmodel_full)
+
+pred_full <- predict(logmodel_full, madness_test, type = "response")
+bin_full <- ifelse(pred_full >= 0.5, 1, 0)
+confusionMatrix(as.factor(bin_full), as.factor(madness_test$winner), positive = "1")
+```
+
+The full model predicts well, but the coefficients are hard to trust. A lot of the variables measure almost the same thing (multicollinearity):
+
+- `orb_pg + drb_pg = trb_pg` and `fg2_pg + fg3_pg = fg_pg`, so those are exactly redundant
+- `ts_pct`, `efg_pct` and `fg_pct` all measure shooting efficiency, which is why their standard errors are huge
+- `win_pct`, `win_pct_home` and `win_pct_away` overlap, so the home/away versions come out with "backwards" negative signs
+
+So in this model we can't say which stats actually drive wins.
+
+# Model 2: Backward Stepwise
+
+We let R drop variables one at a time when removing them improves AIC.
+
+```{r}
+logmodel_step <- step(logmodel_full, direction = "backward", trace = 0)
+summary(logmodel_step)
+
+pred_step <- predict(logmodel_step, madness_test, type = "response")
+bin_step <- ifelse(pred_step >= 0.5, 1, 0)
+confusionMatrix(as.factor(bin_step), as.factor(madness_test$winner), positive = "1")
+```
+
+Stepwise cuts the model to `r length(coef(logmodel_step)) - 1` predictors, but it still has redundant variables and contradictory signs, so the interpretation problem doesn't go away.
+
+# Model 3 (Final): Team Differences + Four Factors
+
+Two changes fix this:
+
+1. **Use differences instead of separate team 1 and team 2 columns.** A game is about how the two teams compare, so for each stat we use `team 1 - team 2`. This cuts the number of predictors in half and puts both teams into one coefficient. A positive difference means team 1 is higher on that stat.
+2. **Pick a small set of variables on purpose instead of throwing in all of them.** We keep team quality (seed, SRS, strength of schedule, win %), basketball's "Four Factors" (shooting via eFG%, turnovers, rebounding, getting to the free throw line), and two roster measures (experience and height). Each one measures something different, so they don't overlap.
+
+```{r}
+# build difference variables for every stat that exists for both teams
+stats <- sub("\\.1$", "", grep("\\.1$", names(mmadness), value = TRUE))
+stats <- stats[paste0(stats, ".2") %in% names(mmadness)]
+
+madness_diff <- data.frame(winner = mmadness$winner)
+for (s in stats) {
+  madness_diff[[paste0(s, "_diff")]] <- mmadness[[paste0(s, ".1")]] - mmadness[[paste0(s, ".2")]]
+}
+
+# same rows as the other models
+diff_train <- madness_diff[train_rows, ]
+diff_test <- madness_diff[-train_rows, ]
+
+logmodel_final <- glm(winner ~ seed_diff + srs_diff + sos_diff + win_pct_diff +
+                        efg_pct_diff + tov_pct_diff + trb_pct_diff + ft_rate_diff +
+                        exp_avg_diff + height_avg_diff,
+                      data = diff_train, family = "binomial")
+summary(logmodel_final)
+
+# multicollinearity check (VIF under ~5 is fine, under 10 is acceptable)
+vif(logmodel_final)
+
+pred_final <- predict(logmodel_final, diff_test, type = "response")
+bin_final <- ifelse(pred_final >= 0.5, 1, 0)
+cm_final <- confusionMatrix(as.factor(bin_final), as.factor(diff_test$winner), positive = "1")
+cm_final
+```
+
+# Comparing the Models
+
+### On our test set
+
+```{r}
+auc_full <- auc(madness_test$winner, pred_full, quiet = TRUE)
+auc_step <- auc(madness_test$winner, pred_step, quiet = TRUE)
+auc_final <- auc(diff_test$winner, pred_final, quiet = TRUE)
+
+comparison <- data.frame(
+  Model = c("Always pick team 1", "Always pick better seed",
+            "Full logistic", "Stepwise logistic", "Final (differences)"),
+  Predictors = c(0, 1, length(coef(logmodel_full)) - 1,
+                 length(coef(logmodel_step)) - 1, length(coef(logmodel_final)) - 1),
+  Test_Accuracy = round(c(base_team1, base_seed,
+                          mean(bin_full == madness_test$winner),
+                          mean(bin_step == madness_test$winner),
+                          mean(bin_final == diff_test$winner)), 3),
+  AUC = c(NA, NA, round(c(auc_full, auc_step, auc_final), 3))
+)
+comparison
+```
+
+### 10-fold cross-validation
+
+Our test set is only `r nrow(madness_test)` games, so a single game moves accuracy by about `r round(100/nrow(madness_test), 2)` percentage points. Cross-validation trains and tests each model 10 times on different splits, which gives a fairer comparison.
+
+```{r}
+set.seed(12345)
+folds <- sample(rep(1:10, length.out = nrow(mmadness)))
+
+cv_accuracy <- function(fit_and_predict) {
+  sapply(1:10, function(k) {
+    train_k <- folds != k
+    test_k <- folds == k
+    p <- fit_and_predict(train_k, test_k)
+    mean((p >= 0.5) == mmadness$winner[test_k])
+  })
+}
+
+step_formula <- formula(logmodel_step)
+final_formula <- formula(logmodel_final)
+
+cv_seed  <- cv_accuracy(function(a, b) ifelse(mmadness$seed.1[b] <= mmadness$seed.2[b], 1, 0))
+cv_full  <- cv_accuracy(function(a, b) predict(glm(winner ~ ., data = mmadness[a, ], family = "binomial"),
+                                               mmadness[b, ], type = "response"))
+cv_step  <- cv_accuracy(function(a, b) predict(glm(step_formula, data = mmadness[a, ], family = "binomial"),
+                                               mmadness[b, ], type = "response"))
+cv_final <- cv_accuracy(function(a, b) predict(glm(final_formula, data = madness_diff[a, ], family = "binomial"),
+                                               madness_diff[b, ], type = "response"))
+
+data.frame(
+  Model = c("Always pick better seed", "Full logistic", "Stepwise logistic", "Final (differences)"),
+  CV_Accuracy = round(c(mean(cv_seed), mean(cv_full), mean(cv_step), mean(cv_final)), 3),
+  CV_SD = round(c(sd(cv_seed), sd(cv_full), sd(cv_step), sd(cv_final)), 3)
+)
+```
+
+# Does It Catch Upsets?
+
+Beating the seeds only matters if the model can spot the games where the better seed loses. Here we look at test games where the two seeds were different.
+
+```{r}
+diff_seeds <- madness_test$seed.1 != madness_test$seed.2
+favorite_team1 <- madness_test$seed.1 < madness_test$seed.2
+favorite_won <- ifelse(favorite_team1, madness_test$winner == 1, madness_test$winner == 0)
+model_picks_favorite <- ifelse(favorite_team1, bin_final == 1, bin_final == 0)
+
+upsets <- diff_seeds & !favorite_won
+model_upset_picks <- diff_seeds & !model_picks_favorite
+
+n_games <- sum(diff_seeds)
+n_upsets <- sum(upsets)
+n_upset_picks <- sum(model_upset_picks)
+upsets_caught <- sum(upsets & model_upset_picks)
+
+data.frame(
+  Measure = c("Test games with different seeds", "Actual upsets",
+              "Times the model picked against the seed", "...and the upset happened",
+              "Hit rate on upset picks", "Share of all upsets caught"),
+  Value = c(n_games, n_upsets, n_upset_picks, upsets_caught,
+            paste0(round(100*upsets_caught/n_upset_picks), "%"),
+            paste0(round(100*upsets_caught/n_upsets), "%"))
+)
+```
+
+# Interpretation
+
+Odds ratios in units that make sense (a value above 1 means it raises team 1's odds of winning):
+
+```{r}
+b <- coef(logmodel_final)
+data.frame(
+  Change_in_team1_vs_team2 = c("1 seed line worse", "+10 pts win %", "+1 pt strength of schedule",
+                               "+1 pt SRS", "+1 yr avg experience"),
+  Odds_Ratio = round(exp(c(b["seed_diff"], 0.1*b["win_pct_diff"], b["sos_diff"],
+                           b["srs_diff"], b["exp_avg_diff"])), 2)
+)
+```
+
+**Our final model correctly predicts `r round(100*mean(bin_final == diff_test$winner), 1)`% of test games, compared with `r round(100*base_seed, 1)`% for always picking the better seed.** Cross-validation tells the same story: `r round(100*mean(cv_final), 1)`% vs. `r round(100*mean(cv_seed), 1)`%. So team statistics clearly carry information that seeds miss.
+
+The full 91-variable model actually does slightly *worse* than the 10-variable difference model in cross-validation (`r round(100*mean(cv_full), 1)`% vs. `r round(100*mean(cv_final), 1)`%). Most of those extra columns repeat each other, so adding them only made the model noisier and harder to read. The smaller model is more accurate, easier to explain, and its coefficients make sense.
+
+What drives the predictions:
+
+- **Win percentage and strength of schedule are the strongest predictors.** A team that wins more games against tougher opponents is much more likely to win, which makes sense.
+- **Once win % and schedule are accounted for, a worse seed actually helps** (`seed_diff` is positive). Between two teams with the same record against the same quality of opponents, the lower-seeded one wins more often. That suggests the committee under-seeds some teams, and it's exactly the kind of mistake a bettor could exploit. Seed, SRS and strength of schedule do overlap somewhat (VIFs between 5 and 9), so we treat this as a suggestion rather than a firm conclusion.
+- **The Four Factors add little once team quality is in the model.** Shooting, turnovers and rebounding mostly show up in win % already. Free throw rate and experience are borderline.
+
+On upsets, the model picked against the seed `r n_upset_picks` times and the upset actually happened in `r upsets_caught` of them (`r round(100*upsets_caught/n_upset_picks)`%). That catches `r round(100*upsets_caught/n_upsets)`% of all the upsets in our test set. Someone picking by seed catches 0% of upsets by definition, and this is exactly where the model's edge comes from.
+
+**Limitations:** We dropped about 10% of games because of missing values (mostly the 2002 and 2024 seasons). We used a 0.5 cutoff throughout. Also, beating the seeds isn't the same as beating the betting market, since Vegas lines already use many of these stats. That's the next test for this project.
