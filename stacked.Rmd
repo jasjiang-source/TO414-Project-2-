@@ -27,11 +27,27 @@ knn_pred <- readRDS("knn_stacked_probability.rds")
 decision_tree_pred <- readRDS("tree_stacked_probability.rds")
 svm_pred <- readRDS("svm_stacked_probability.rds")
 rf_pred <- readRDS("rf_stacked_probability.rds")
-
+logistic_pred <- readRDS("logistic_stacked_prob_v2.rds")
 ```
 
 
 ## Turning into data frame
+```{r}
+madness_predictions <- data.frame(ann_pred, knn_pred, decision_tree_pred, svm_pred, rf_pred, logistic_pred, winner = madness_test$winner)
+
+# Split into 70% training and 30% test data
+set.seed(12345)
+train_rows <- sample(
+  1:nrow(madness_predictions),
+  size = 0.70 * nrow(madness_predictions)
+)
+
+train_predictions <- madness_predictions[train_rows, ]
+test_predictions  <- madness_predictions[-train_rows, ]
+
+
+```
+
 
 ## Splitting into 70-30 split for testing/training
 
