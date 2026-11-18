@@ -1,6 +1,12 @@
 ---
 title: "KNN"
-output: html_document
+author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
 ---
 
 # Loading in the cleaned and split data
@@ -40,7 +46,7 @@ madness_test_pred_knn <- knn(
   train = knn_train,
   test = knn_test,
   cl = knn_train_labels,
-  k = k_start
+  k = k_start, prob = TRUE
 )
 
 ```
@@ -52,6 +58,7 @@ knn_results <- list(
   prediction = madness_test_pred_knn,
   actual = knn_test_labels
 )
+
 
 library(caret)
 knn_confusion <- confusionMatrix(
@@ -102,13 +109,14 @@ madness_final_knn <- knn(
   train = knn_train,
   test = knn_test,
   cl = knn_train_labels,
-  k = best_k
+  k = best_k, prob = TRUE
 )
 
 knn_results_final <- list(
   prediction = madness_final_knn,
   actual = knn_test_labels
 )
+
 
 library(caret)
 knn_confusion_final <- confusionMatrix(
@@ -122,11 +130,18 @@ knn_confusion_final
 
 ```
 
+# Getting values as probabilities 
+```{r}
+knn_vote_share <- attr(madness_final_knn, "prob")
+knn_prob_stacked <- ifelse(madness_final_knn == "1", knn_vote_share, 1 - knn_vote_share)
+```
+
+
 # Saving relevant data files
 ```{r}
 
-saveRDS(knn_results_final$prediction, "knn_predictions.rds")
-saveRDS(knn_confusion_final, "knn_confusion_matrix.rds")
+saveRDS(knn_prob_stacked, "knn_stacked_probability.rds")
+saveRDS(knn_confusion_final, "knn_confusion.rds")
 
 
 ```

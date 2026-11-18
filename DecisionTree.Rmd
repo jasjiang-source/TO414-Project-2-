@@ -3,6 +3,60 @@ title: "Decision Tree"
 output: html_document
 ---
 
+# Data visualization: why rows and columns were removed
+
+`Data_Cleaning.Rmd` dropped every column with more than 400 missing values, then removed every game that still had a missing value. This heatmap rebuilds those steps on the raw data, with games in chronological order (2001 at the top, 2025 at the bottom).
+
+```{r, message=FALSE, fig.width=10, fig.height=6}
+library(ggplot2)
+
+# same steps as Data_Cleaning.Rmd
+raw <- read.csv("ncaa_mbb_2001-2025_full.csv")[1:1511, ]
+years <- raw$year
+raw <- raw[, !(names(raw) %in% c("name.1", "link.1", "name.2", "link.2",
+                                 "point_diff", "year", "conf.1", "conf.2"))]
+
+na_matrix <- is.na(raw)
+col_na <- colSums(na_matrix)
+dropped_cols <- names(col_na)[col_na > 400]
+kept_cols <- names(col_na)[col_na <= 400]
+rows_removed <- sum(rowSums(na_matrix[, kept_cols]) > 0)
+
+# columns: kept first, dropped last, each sorted by number of NAs
+col_order <- c(kept_cols[order(col_na[kept_cols])], dropped_cols[order(col_na[dropped_cols])])
+
+heat <- expand.grid(game = seq_len(nrow(raw)), variable = seq_along(col_order))
+heat$missing <- as.vector(na_matrix[, col_order])
+heat$status <- ifelse(!heat$missing, "Present",
+                      ifelse(col_order[heat$variable] %in% dropped_cols,
+                             "Missing in a dropped column",
+                             "Missing in a kept column (game removed)"))
+
+year_starts <- match(unique(years), years)
+
+ggplot(heat, aes(x = variable, y = game, fill = status)) +
+  geom_raster() +
+  scale_fill_manual(values = c("Present" = "grey92",
+                               "Missing in a dropped column" = "#E69F00",
+                               "Missing in a kept column (game removed)" = "#0072B2")) +
+  geom_vline(xintercept = length(kept_cols) + 0.5, linetype = "dashed") +
+  scale_y_reverse(breaks = year_starts, labels = unique(years)) +
+  labs(title = "Missing values in the March Madness data",
+       subtitle = "Columns right of the dashed line were dropped",
+       x = "Variables (sorted by number of missing values)", y = "Tournament year",
+       fill = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), panel.grid = element_blank(),
+        axis.text.y = element_text(size = 7), legend.position = "bottom")
+
+cat(length(dropped_cols), "of", ncol(raw), "columns dropped;",
+    rows_removed, "of", nrow(raw), "games removed;", nrow(raw) - rows_removed, "games kept\n")
+```
+
+- **Dropped columns (orange):** advanced stats such as pace, offensive rating and the opponent shooting splits are missing for every game from 2002 to 2009, which is more than 500 games.
+- **Removed games (blue):** all of 2002 is missing fouls per game, and all of 2024 is missing the bench-minutes stats, so those two years go entirely. The remaining removed games are scattered single-game gaps.
+- **Why not impute:** whole seasons are missing at once, so filling in values would mean inventing them rather than estimating a few gaps.
+
 # Load data
 ```{r}
 library(C50)
@@ -60,6 +114,10 @@ tree_comparison
 
 # Saving relevant data files
 ```{r}
-saveRDS(boost_pred, "tree_predictions.rds")
-saveRDS(boost_confusion, "tree_confusion_matrix.rds")
+# Probability that team 1 wins, one value per test game, in the same order as testing_data.rds
+tree_prob_stacked <- as.vector(predict(boost_model, madness_test, type = "prob")[, "1"])
+summary(tree_prob_stacked)
+
+saveRDS(tree_prob_stacked, "tree_stacked_probability.rds")
+saveRDS(boost_confusion, "tree_confusion.rds")
 ```
