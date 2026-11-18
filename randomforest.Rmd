@@ -1,6 +1,13 @@
 ---
-title: "randomforest"
-output: html_document
+title: "Random Forest Model"
+author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
+date: "2026-10-22"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
 ---
 
 # Loading in the cleaned and split data
@@ -44,7 +51,7 @@ rf_confusion
 
 # Saving relevant data files
 ```{r}
-saveRDS(rf_pred, "rf_predictions.rds")
-saveRDS(rf_confusion, "rf_confusion_matrix.rds")
+saveRDS(rf_pred, "rf_stacked_probability.rds")
+saveRDS(rf_confusion, "rf_confusion.rds")
 
 ```

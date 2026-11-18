@@ -1,6 +1,13 @@
 ---
-title: "SVM"
-output: html_document
+title: "SVM Model"
+author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
+date: "2026-10-22"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
 ---
 
 # Load data
@@ -95,3 +102,10 @@ row.names(kernel_comparison) <- NULL
 
 kernel_comparison
 ```
+
+
+```{r}
+saveRDS(madness_predictions, "svm_stacked_probability.rds")
+saveRDS(svm_confusion, "svm_confusion.rds")
+```
+

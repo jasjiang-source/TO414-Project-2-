@@ -1,6 +1,13 @@
 ---
 title: "Decision Tree"
-output: html_document
+author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
+date: "2026-10-22"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
 ---
 
 # Data visualization: why rows and columns were removed
