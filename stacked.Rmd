@@ -49,11 +49,31 @@ test_predictions  <- madness_predictions[-train_rows, ]
 ```
 
 
-## Splitting into 70-30 split for testing/training
-
 # Running decision tree
 
+```{r}
+library(C50)
+
+stacked_model <- C5.0(as.factor(winner) ~ ., data = train_predictions)
+plot(stacked_model)
+```
+
+
 # Confusion matrix?
+
+```{r}
+stacked_pred <- predict(stacked_model, test_predictions)
+
+library(caret)
+stacked_confusion <- confusionMatrix(
+  as.factor(stacked_pred),
+  as.factor(test_predictions$winner),
+  positive = "1"
+)
+
+stacked_confusion
+```
+
 
 # Cost matrix?
 
