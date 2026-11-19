@@ -1,0 +1,260 @@
+---
+title: "Data Set Overview and Visualization"
+author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
+date: "2026-11-19"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+```
+
+# Introduction and Problem Statement
+
+## The situation: what is March Madness?
+
+Every March, 68 Division I men's basketball teams are selected for the NCAA tournament. A 10-person selection committee ranks the teams, places them into four regions, and gives each team a seed from 1 (strongest) to 16 (weakest). After the opening games, 64 teams play six single-elimination rounds, from the Round of 64 to the national championship. A team's season ends with one bad game, which is why the tournament is so unpredictable and so popular.
+
+## Our data
+
+We are using the NCAA Men's March Madness dataset compiled by G. M. Tanner ([github.com/gmtanner-cord/March-Madness](https://github.com/gmtanner-cord/March-Madness)). The data was collected from [Sports-Reference](https://www.sports-reference.com/cbb/) and covers every NCAA men's tournament game from 2001 to 2025 (there was no tournament in 2020).
+
+Each row is one tournament game between "team 1" and "team 2" and has 134 columns: each team's seed, name, and conference, the round and year, the winner, and about 60 season statistics for each team (winning percentage, strength of schedule, shooting, rebounding, turnovers, and so on).
+
+## Why it is important
+
+March Madness is one of the biggest betting events in American sports, with billions of dollars wagered every year and tens of millions of bracket contest entries. The selection committee's seeds are the public's main guide to who should win. Most bracket players lean heavily on seeds, and the betting public tends to back the better-seeded team. Higher seeds win roughly 65% to 70% of tournament games, which means about 1 in 3 games goes against the seeds. Anyone who can tell **which** games those will be has an edge.
+
+## Who it impacts and who our audience is
+
+- **Sports bettors:** our main audience. A bettor who can spot the games where the seeds are wrong can win money, especially on underdogs, which pay more when they win.
+- **Sportsbooks (like DraftKings and FanDuel):** they set the odds, so they lose money when the public keeps backing favorites that then lose. A better model helps them price games more accurately.
+- **Bracket contest players and office pools:** picking the right underdog wins is usually what separates a winning bracket from the rest.
+- **Media and TV networks:** they use predictions to decide which games to promote and talk about.
+
+**Business question:** Using a team's season statistics (information available before a tournament), can we predict whether that team will win a March Madness game more accurately than simply picking the higher seed?
+
+## What our model means for profits
+
+To make money, our model ultimately has to do better than the betting market's odds, not just the seeds. Beating the seed-based pick is the first step and shows whether team statistics carry information that seeds miss. In later stages we will improve the model and test how often it would have identified profitable picks.
+
+# Data Visualization
+
+## Loading the data
+
+```{r}
+mmadness <- read.csv("ncaa_mbb_2001-2025_full.csv")
+
+# The second half of the file repeats every game with team 1 and team 2 swapped, so we keep the first 1,511 rows (at Prof. Kumar's suggestion)
+mmadness <- mmadness[1:1511, ]
+
+# 1 if team 1 won, 0 if team 2 won
+mmadness$team1_win <- ifelse(mmadness$winner == "team1", 1, 0)
+
+# Underdog = the team with the worse (higher number) seed. Games between equal seeds have no underdog.
+mmadness$has_underdog <- mmadness$seed.1 != mmadness$seed.2
+mmadness$underdog_win <- ifelse((mmadness$seed.1 > mmadness$seed.2 & mmadness$team1_win == 1) |
+                                (mmadness$seed.2 > mmadness$seed.1 & mmadness$team1_win == 0), 1, 0)
+
+# Looking at descriptive statistics 
+summary(mmadness)
+
+# Analyzing the structure of the data 
+str(mmadness)
+```
+
+
+## How often does the better seed win?
+
+```{r}
+seed_games <- mmadness[mmadness$has_underdog, ]
+
+cat("Games with an underdog:", nrow(seed_games), "\n")
+cat("Better seed win rate:", round(1 - mean(seed_games$underdog_win), 3), "\n")
+cat("Underdog win rate:", round(mean(seed_games$underdog_win), 3))
+```
+
+Out of the 1,492 games between different seeds, the better seed won 71% of the time and the underdog won 29% of the time. This is right around the 65% to 70% figure above and is the seed-based pick our model is trying to beat. Seed is clearly a significant variable, but it is wrong in more than 1 of every 4 games.
+
+
+## Underdog wins by round
+
+```{r}
+round_rates <- aggregate(underdog_win ~ round, data = seed_games, FUN = mean)
+
+ggplot(round_rates, aes(x = factor(round), y = underdog_win)) +
+  geom_col(fill = "darkorange") +
+  scale_x_discrete(labels = c("Round of 64", "Round of 32", "Sweet 16", "Elite 8", "Final Four", "Final")) +
+  labs(title = "Underdog Win Rate by Round", x = "", y = "Share of games won by the underdog")
+
+round(round_rates, 2)
+```
+
+Underdogs win between about 20% and 45% of games in every round, so underdog wins are not just a first-weekend thing. The Elite 8 has the highest rate (about 45%), because by then the remaining teams are all strong and the seed gap is small. This trend tells us the seed matters less as the tournament goes on, which is where team statistics could add the most value.
+
+
+## Underdog wins by seed matchup (Round of 64)
+
+```{r}
+r1 <- mmadness[mmadness$round == 1, ]
+r1$matchup <- paste(pmin(r1$seed.1, r1$seed.2), "vs", pmax(r1$seed.1, r1$seed.2))
+r1$matchup <- factor(r1$matchup, levels = paste(1:8, "vs", 16:9))
+
+matchup_rates <- aggregate(underdog_win ~ matchup, data = r1, FUN = mean)
+
+ggplot(matchup_rates, aes(x = matchup, y = underdog_win)) +
+  geom_col(fill = "darkorange") +
+  labs(title = "Underdog Win Rate by First-Round Matchup", x = "Seed matchup", y = "Share of games won by the underdog")
+
+matchup_rates
+```
+
+There is a clear trend where the bigger the seed gap, the less likely an underdog win. A 16 seed beat a 1 seed only about 2% of the time, while 8 vs 9 games are a coin flip (about 50%) and 12 seeds beat 5 seeds about 41% of the time. For bettors, the middle matchups (5 vs 12 through 8 vs 9) are where a better prediction is worth the most, because the outcome is uncertain and the underdog pays more.
+
+
+## Underdog wins by year
+
+```{r}
+year_counts <- aggregate(underdog_win ~ year, data = seed_games, FUN = sum)
+
+ggplot(year_counts, aes(x = year, y = underdog_win)) +
+  geom_line(color = "steelblue") +
+  geom_point(color = "steelblue") +
+  labs(title = "Number of Underdog Wins per Tournament", x = "Year", y = "Underdog wins")
+
+range(year_counts$underdog_win)
+```
+
+Each tournament has between 11 and 22 underdog wins, and the line jumps up and down with no clear upward or downward trend. This suggests year is not a significant variable, so we leave it out of our models.
+
+
+## Which statistics are most related to winning?
+
+```{r}
+# Difference between team 1 and team 2 for each numeric stat
+stats1 <- grep("\\.1$", names(mmadness), value = TRUE)
+stats1 <- setdiff(stats1, c("name.1", "link.1", "conf.1"))
+
+cors <- sapply(stats1, function(s) cor(mmadness[[s]] - mmadness[[sub("\\.1$", ".2", s)]],
+                                       mmadness$team1_win, use = "complete.obs"))
+cors <- data.frame(stat = sub("\\.1$", "", names(cors)), cor = cors)
+top <- head(cors[order(-abs(cors$cor)), ], 12)
+
+ggplot(top, aes(x = reorder(stat, abs(cor)), y = cor)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 12 Stats Most Correlated with Team 1 Winning",
+       x = "Stat (team 1 minus team 2)", y = "Correlation with team 1 winning")
+
+top
+```
+
+The most significant variables are SRS, seed, strength of schedule (`sos`), and winning percentage. Seed shows a negative correlation because a lower seed number is better. RSCI (the share of top high school recruits on the roster) and offensive rating (`off_rtg`, points per 100 possessions) are next, and shooting, scoring, and turnover stats also matter. Since several of these are not the seed itself, a model using the full set of statistics may find information that the seed misses.
+
+
+## What leads to a higher win rate?
+
+Next we want to look at specific parts of the game (shooting, rebounding, turnovers, defense, size, and experience) to see which ones go along with winning more often.
+
+
+### Does a higher 3-point percentage lead to more wins?
+
+```{r}
+ggplot(mmadness, aes(x = fg3_pct.1, fill = factor(team1_win, labels = c("Lost", "Won")))) +
+  geom_histogram(binwidth = 0.01, position = "fill") +
+  scale_fill_manual(values = c("Lost" = "grey", "Won" = "steelblue")) +
+  labs(title = "Team 1 Win Rate by 3-Point Percentage", x = "Team 1 season 3-point %", y = "Share of games", fill = "Team 1")
+```
+
+A higher 3-point percentage goes with more wins. Team 1s that shot under 33% from three during the season won only about 50% to 55% of their games, while those that shot 39% or better won about 72% to 74%, well above the 65% average. Threes are worth 50% more than twos, so a team that makes its threes scores more points on the same number of shots. Good shooters also force defenders to guard them far from the basket, which opens up easier shots inside, and a hot shooting night can carry a less talented team through a single game. For bettors, a strong 3-point shooting team is a good candidate to beat its seed.
+
+
+### Does shooting more 3s help?
+
+```{r}
+ggplot(mmadness, aes(x = factor(team1_win, labels = c("Lost", "Won")), y = fg3a_per_fga_pct.1, fill = factor(team1_win, labels = c("Lost", "Won")))) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("Lost" = "grey", "Won" = "steelblue")) +
+  labs(title = "Share of Shots From 3: Team 1 Wins vs. Losses", x = "Team 1", y = "Team 1 share of shots taken from 3", fill = "Team 1")
+```
+
+This boxplot compares how often team 1 shot threes in the games it won and the games it lost. Shooting more threes does not help: the two boxes are almost identical, and both winners and losers took about 34% of their shots from three. Just because a team shoots more threes does not mean they all go in, and a missed three is often a trade of a closer, higher-percentage shot for a worse one. Teams that rely on threes are also streaky, so on a cold night they can lose to anyone, which is risky in a one-and-done tournament. Together with the last chart, this tells us that **making** threes matters, not **taking** them, so a bettor should not back a team just because it plays a 3-point-heavy style.
+
+
+### Overall shooting efficiency
+
+```{r}
+ggplot(mmadness, aes(x = efg_pct.1, fill = factor(team1_win, labels = c("Lost", "Won")))) +
+  geom_density(alpha = 0.5) +
+  scale_fill_manual(values = c("Lost" = "grey", "Won" = "steelblue")) +
+  labs(title = "Team 1 Effective FG %: Wins vs. Losses", x = "Team 1 season effective FG %", y = "Density", fill = "Team 1")
+```
+
+This density plot shows the spread of team 1's effective field goal % in the games it won (blue) and lost (grey). The blue curve sits clearly to the right where team 1 winners had a median effective FG % of about 52.8%, compared with 52.1% for losers, and most of the teams above 55% are winners. Effective FG % counts every shot and gives extra credit for threes, so it measures exactly how many points a team gets per shot, and basketball comes down to scoring more points per possession than the other team. Because it combines twos and threes, it captures a team's whole offense, which is why it is a stronger sign of winning than 3-point % alone. This makes it one of the most useful shooting variables for our model.
+
+
+### Rebounding
+
+```{r}
+ggplot(mmadness, aes(x = trb_pct.1, y = team1_win)) +
+  geom_jitter(height = 0.05, alpha = 0.2) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+  labs(title = "Team 1 Rebounding % vs. Chance of Winning", x = "Team 1 season rebounding % (share of all rebounds)", y = "Team 1 won (1) or lost (0)")
+```
+
+This scatter plot shows each game as a dot (1 = team 1 won, 0 = lost), and the blue line is a logistic regression curve showing team 1's chance of winning at each rebounding level. The line slopes up where a team 1 that grabbed more rebounds had a higher chance of winning. Every rebound decides who gets the ball and an offensive rebound gives a team a second chance to score. A defensive rebound ends the opponent's possession. A team that wins the rebounding battle simply gets more shots than its opponent, even if both teams shoot equally well. Rebounding teams also tend to be bigger and more physical, which holds up well against strong tournament opponents, and this curve is a preview of how the variable will behave in our logistic regression.
+
+
+### Turnovers
+
+```{r}
+mmadness$tov_group <- cut(mmadness$tov_pct.1, c(0, 14, 16, 18, 30), right = FALSE,
+                          labels = c("Under 14%", "14-16%", "16-18%", "Over 18%"))
+
+ggplot(mmadness, aes(x = tov_group, y = team1_win)) +
+  stat_summary(fun = mean, geom = "bar", fill = "steelblue") +
+  labs(title = "Team 1 Win Rate by Turnover Rate", x = "Team 1 season turnover % (share of possessions ending in a turnover)", y = "Team 1 win rate")
+```
+
+This bar chart groups team 1 by its turnover rate and shows its win rate in each group. Fewer turnovers lead to more wins. A turnover is a possession that ends with zero points, and it often gives the other team an easy fast-break basket. Teams that take care of the ball usually have experienced, steady guards, which matters most in close, high-pressure tournament games. For bettors, a sloppy team with a good seed is one to be careful about.
+
+
+### Defense
+
+```{r}
+ggplot(mmadness, aes(x = factor(team1_win, labels = c("Lost", "Won")), y = fg_pct_opp.1, fill = factor(team1_win, labels = c("Lost", "Won")))) +
+  geom_violin() +
+  geom_boxplot(width = 0.1, fill = "white") +
+  scale_fill_manual(values = c("Lost" = "grey", "Won" = "steelblue")) +
+  labs(title = "Opponents' FG % (Defense): Team 1 Wins vs. Losses", x = "Team 1", y = "FG % team 1 allowed during the season", fill = "Team 1")
+```
+
+This violin plot shows the full spread of team 1's defense in wins and losses, with a small boxplot inside each. fg_pct_opp is the field goal percentage a team allowed its opponents, so lower means better defense. The winning side sits lower (a median of 41.0% allowed vs. 41.5% for losses), and the very best defenses, around 37% to 38%, are mostly winners. Holding the other team to bad shooting is the other half of outscoring them. Defense is also more reliable than offense: shooting can go cold on any night, but effort, size, and good positioning show up every game, which is why "defense wins championships" is a popular saying in March.
+
+
+### Experience
+
+```{r}
+ggplot(mmadness, aes(x = factor(team1_win, labels = c("Lost", "Won")), y = exp_avg.1, fill = factor(team1_win, labels = c("Lost", "Won")))) +
+  stat_summary(fun = mean, geom = "bar") +
+  scale_fill_manual(values = c("Lost" = "grey", "Won" = "steelblue")) +
+  labs(title = "Average Experience: Team 1 Wins vs. Losses", x = "Team 1", y = "Team 1 average years of experience", fill = "Team 1")
+```
+
+This bar chart compares team 1's average roster experience in the games it won and lost. Surprisingly, winners were slightly **younger**. The gap is small, but it goes the opposite way from what we expected, since older players have been in big games before. A likely reason is that the most talented programs, like Kentucky and Duke, often start top freshmen who leave for the NBA after one year, so their rosters are young but very talented. This could potentially match with a strong RSCI (recruiting) result and suggests that talent matters more than age.
+
+
+# Summary
+
+The better seed wins about 70% of the time, so the seed-based pick is a strong baseline. Underdog wins happen in every round and are most common in close seed matchups, where the seed tells us the least, which is also where bettors and bracket players have the most to gain. Team strength (SRS), strength of schedule, and winning percentage clearly separate winners from losers, even among games with similar seeds, while the year does not. Looking at specific parts of the game, teams that turn the ball over less, hold opponents to a lower shooting percentage, shoot more efficiently, out-rebound their opponent, are taller, and make more of their threes all win noticeably more often. Shooting a lot of threes and playing at a fast pace do not help. This gives us reason to believe that a model built on season statistics can beat simply picking the higher seed, which is what our models test next.
+
+
