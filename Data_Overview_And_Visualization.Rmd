@@ -1,5 +1,5 @@
 ---
-title: "Data Set Overview and Visualization"
+title: "Data Set Overview, Visualization, and Model Analysis"
 author: "Ellen Grehan, Sean Graham, Jason Jiang, Zaid Omari, Samantha Pelter"
 date: "2026-11-19"
 output:
@@ -253,8 +253,107 @@ ggplot(mmadness, aes(x = factor(team1_win, labels = c("Lost", "Won")), y = exp_a
 This bar chart compares team 1's average roster experience in the games it won and lost. Surprisingly, winners were slightly **younger**. The gap is small, but it goes the opposite way from what we expected, since older players have been in big games before. A likely reason is that the most talented programs, like Kentucky and Duke, often start top freshmen who leave for the NBA after one year, so their rosters are young but very talented. This could potentially match with a strong RSCI (recruiting) result and suggests that talent matters more than age.
 
 
-# Summary
+## Data Visualization Summary
 
 The better seed wins about 70% of the time, so the seed-based pick is a strong baseline. Underdog wins happen in every round and are most common in close seed matchups, where the seed tells us the least, which is also where bettors and bracket players have the most to gain. Team strength (SRS), strength of schedule, and winning percentage clearly separate winners from losers, even among games with similar seeds, while the year does not. Looking at specific parts of the game, teams that turn the ball over less, hold opponents to a lower shooting percentage, shoot more efficiently, out-rebound their opponent, are taller, and make more of their threes all win noticeably more often. Shooting a lot of threes and playing at a fast pace do not help. This gives us reason to believe that a model built on season statistics can beat simply picking the higher seed, which is what our models test next.
+
+# Model Analysis
+
+Now we will predict whether our team 1 wins based on the features within our dataset. We will use the following models:
+
+- Logistic
+- KNN
+- ANN 
+- Random Forest 
+- SVM
+- Decision Tree
+
+After these are run we will also analyze the results using a stacked model, created with a decision tree that uses each model as an input. 
+
+In our context, overall model accuracy is the most important attribute. Users can either bet that a team will win or lose, so we will treat false negatives and positivies as equally important instead of optimizing for sensitivity or specificy.  
+
+Our data was cleaned and split in a separate file, titled "Data_Cleaning". Each model also has a file including model building and optimization. Only the results of the models will be shown below, using a confusion matrix to evaluate how well the model, built on 50% of the data, predicts the testing data. 
+
+## Logistic
+```{r}
+logistic_confusion <- readRDS("logistic_confusion_v2.rds")
+
+logistic_confusion
+
+```
+The logistic model correctly predicted 356 winners, and 157 losers. It mistakenly predict 76 winners, false positives, and 93 losers, false negatives. The model had a relatively strong accuracy, 75.22% and a moderate luck-adjusted score of 0.4586. 
+
+
+## KNN
+```{r}
+knn_confusion <- readRDS("knn_confusion.rds")
+
+knn_confusion
+
+```
+The KNN model correctly predicted 354 winners, and 129 losers. It mistakenly predict 104 winners, false positives, and 95 losers, false negatives. The model had a decently strong accuracy, 70.82% and a lower luck-adjusted score of 0.3453. 
+
+
+
+## ANN
+
+```{r}
+ann_confusion <- readRDS("ANN_confusion.rds")
+
+ann_confusion
+
+```
+The ANN model correctly predicted 348 winners, and 154 losers. It mistakenly predict 79 winners, false positives, and 101 losers, false negatives. The model had a decently strong accuracy, 73.61% and a lower luck-adjusted score of 0.4263. 
+
+
+
+## Random Forest
+
+```{r}
+rf_confusion <- readRDS("rf_confusion.rds")
+
+rf_confusion
+
+```
+The random forest model correctly predicted 387 winners, and 112 losers. It mistakenly predict 121 winners, false positives, and 62 losers, false negatives. The model had a decently strong accuracy, 73.17% and a lower luck-adjusted score of 0.3648. 
+
+
+## SVM 
+
+```{r}
+svm_confusion <- readRDS("svm_confusion.rds")
+
+svm_confusion
+
+```
+The SVM model correctly predicted 367 winners, and 144 losers. It mistakenly predict 89 winners, false positives, and 82 losers, false negatives. The model had a decently strong accuracy, 74.93% and a higher luck-adjusted score of 0.4386. 
+
+
+## Decision Tree
+
+```{r}
+dt_confusion <- readRDS("tree_confusion.rds")
+
+dt_confusion
+
+```
+The decision tree model correctly predicted 359 winners, and 126 losers. It mistakenly predict 107 winners, false positives, and 90 losers, false negatives. The model had a decently strong accuracy, 71.11% and a lower luck-adjusted score of 0.3464. 
+
+
+## Stacked Model
+
+```{r}
+stacked_confusion <- readRDS("stacked_confusion.rds")
+
+stacked_confusion
+
+```
+The stacked model correctly predicted 116 winners, and 41 losers. It mistakenly predict 36 winners, false positives, and 12 losers, false negatives. The model had a decently strong accuracy, 76.59% and a high luck-adjusted score of 0.4678. 
+
+## Model Conclusion
+
+Overall, the strongest predictive model was our stacked model with an accuracy of 76.59% and a luck-adjusted score of 0.4678. The model was created with a smaller testing and training set, so it is key to keep in mind that it may be more/less accurate because it worked with less data. 
+
+According to the official NCAA, higher-seeded (better-ranked) teams win roughly 65% to 70% of all March Madness games overall. However, the exact win rate varies significantly depending on the specific round and seed matchup.Therefore, our model beats the seed-based odds by ~6-11%, and can be considered successful. 
 
 

@@ -75,6 +75,10 @@ stacked_confusion
 ```
 
 
-# Cost matrix?
+# Saving Files
+```{r}
+saveRDS(stacked_confusion, "stacked_confusion.rds")
+```
+
 
 
